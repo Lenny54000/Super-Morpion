@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Super Morpion - Ultimate Tic Tac Toe</title>
+    <style>
+        /* ===== VARIABLES & RESET ===== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-dark: #0f0f0f;
+            --bg-card: #1a1a1a;
+            --border-color: #333;
+            --primary: #00d4ff;
+            --secondary: #ff006e;
+            --text: #ffffff;
+            --text-dim: #888;
+            --hover: rgba(0, 212, 255, 0.1);
+            --glow: 0 0 20px rgba(0, 212, 255, 0.5);
+            --win-x: #00d4ff;
+            --win-o: #ff006e;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f0f0f 0%, #1a1a2e 100%);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        /* ===== HEADER ===== */
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            font-size: clamp(1.8rem, 5vw, 3rem);
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+            text-shadow: 0 0 30px rgba(0, 212, 255, 0.3);
+        }
+
+        .game-info {
+            display: flex;
+            gap: 30px;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-top: 15px;
+        }
+
+        .current-player {
+            font-size: 1.2rem;
+            padding: 10px 20px;
+            background: var(--bg-card);
+            border-radius: 10px;
+            border: 2px solid var(--border-color);
+            transition: all 0.3s ease;
+        }
+
+        .current-player.player-x {
+            border-color: var(--primary);
+            box-shadow: 0 0 15px rgba(0, 212, 255, 0.3);
+        }
+
+        .current-player.player-o {
+            border-color: var(--secondary);
+            box-shadow: 0 0 15px rgba(255, 0, 110, 0.3);
+        }
+
+        .score {
+            display: flex;
+            gap: 20px;
+            font-size: 1.1rem;
+        }
+
+        .score-item {
+            padding: 8px 15px;
+            background: var(--bg-card);
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .score-x { color: var(--primary); }
+        .score-o { color: var(--secondary); }
+
+        /* ===== PLATEAU PRINCIPAL ===== */
+        .game-container {
+            max-width: 90vmin;
+            width: 100%;
+        }
+
+        .main-board {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            padding: 20px;
+            background: var(--bg-card);
+            border-radius: 20px;
+            box-shadow: 0 10px 50px rgba(0, 0, 0, 0.5);
+        }
+
+        /* ===== PETIT MORPION ===== */
+        .mini-board {
+            position: relative;
+            aspect-ratio: 1;
+            background: var(--bg-dark);
+            border-radius: 12px;
+            border: 2px solid var(--border-color);
+            transition: all 0.3s ease;
+            overflow: hidden;
+        }
+
+        /* Zone jouable mise en évidence */
+        .mini-board.playable {
+            border-color: var(--primary);
+            box-shadow: var(--glow);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 20px rgba(0, 212, 255, 0.5); }
+            50% { box-shadow: 0 0 30px rgba(0, 212, 255, 0.8); }
+        }
+
+        /* Zone non jouable grisée */
+        .mini-board.disabled {
+            opacity: 0.4;
+            pointer-events: none;
+        }
+
+        /* Grille 3x3 interne */
+        .mini-board-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 3px;
+            padding: 8px;
+            height: 100%;
+            background: var(--border-color);
+        }
+
+        /* ===== CASES ===== */
+        .cell {
+            background: var(--bg-dark);
+            border: none;
+            cursor: pointer;
+            font-size: clamp(1.2rem, 3vw, 2rem);
+            font-weight: bold;
+            color: var(--text);
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+        }
+
+        .cell:hover:not(.taken) {
+            background: var(--hover);
+            transform: scale(1.05);
+        }
+
+        .cell.taken {
+            cursor: not-allowed;
+        }
+
+        .cell.x {
+            color: var(--primary);
+            animation: fadeIn 0.3s ease;
+        }
+
+        .cell.o {
+            color: var(--secondary);
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.5) rotate(-180deg);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1) rotate(0);
+            }
+        }
+
+        /* ===== OVERLAY VICTOIRE LOCALE ===== */
+        .mini-board-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: clamp(3rem, 8vw, 6rem);
+            font-weight: bold;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+            z-index: 10;
+        }
+
+        .mini-board.won .mini-board-overlay {
+            opacity: 1;
+        }
+
+        .mini-board.won-x .mini-board-overlay {
+            color: var(--win-x);
+            text-shadow: 0 0 30px var(--win-x);
+            animation: scaleIn 0.5s ease;
+        }
+
+        .mini-board.won-o .mini-board-overlay {
+            color: var(--win-o);
+            text-shadow: 0 0 30px var(--win-o);
+            animation: scaleIn 0.5s ease;
+        }
+
+        @keyframes scaleIn {
+            from {
+                transform: scale(0) rotate(-180deg);
+                opacity: 0;
+            }
+            to {
+                transform: scale(1) rotate(0);
+                opacity: 1;
+            }
+        }
+
+        .mini-board.won .mini-board-grid {
+            opacity: 0.2;
+        }
+
+        /* ===== MESSAGE VICTOIRE ===== */
+        .game-message {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .game-message.show {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .message-content {
+            text-align: center;
+            padding: 40px;
+            background: var(--bg-card);
+            border-radius: 20px;
+            border: 3px solid var(--primary);
+            box-shadow: 0 0 50px rgba(0, 212, 255, 0.5);
+            animation: bounceIn 0.6s ease;
+        }
+
+        @keyframes bounceIn {
+            0% { transform: scale(0); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        .message-content h2 {
+            font-size: clamp(2rem, 5vw, 3rem);
+            margin-bottom: 20px;
+        }
+
+        .message-content.winner-x h2 {
+            color: var(--primary);
+            text-shadow: 0 0 20px var(--primary);
+        }
+
+        .message-content.winner-o h2 {
+            color: var(--secondary);
+            text-shadow: 0 0 20px var(--secondary);
+        }
+
+        /* ===== BOUTONS ===== */
+        .button {
+            padding: 12px 30px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), #0099cc);
+            color: var(--text);
+            box-shadow: 0 5px 20px rgba(0, 212, 255, 0.4);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(0, 212, 255, 0.6);
+        }
+
+        .btn-secondary {
+            background: var(--bg-card);
+            color: var(--text);
+            border: 2px solid var(--border-color);
+            margin-top: 20px;
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--primary);
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+        }
+
+        .controls {
+            text-align: center;
+            margin-top: 30px;
+        }
+
+        /* ===== RESPONSIVE ===== */
+        @media (max-width: 768px) {
+            .main-board {
+                gap: 10px;
+                padding: 15px;
+            }
+
+            .mini-board-grid {
+                gap: 2px;
+                padding: 5px;
+            }
+
+            .game-info {
+                gap: 15px;
+            }
+
+            .message-content {
+                padding: 30px 20px;
+                margin: 20px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .main-board {
+                gap: 8px;
+                padding: 10px;
+            }
+
+            .cell {
+                font-size: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- En-tête -->
+    <div class="header">
+        <h1>⚡ SUPER MORPION ⚡</h1>
+        <div class="game-info">
+            <div class="current-player" id="currentPlayer">Tour de <span id="playerSymbol">X</span></div>
+            <div class="score">
+                <div class="score-item score-x">X: <span id="scoreX">0</span></div>
+                <div class="score-item score-o">O: <span id="scoreO">0</span></div>
+                <div class="score-item">Nuls: <span id="scoreDraw">0</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Conteneur du jeu -->
+    <div class="game-container">
+        <div class="main-board" id="mainBoard">
+            <!-- Les 9 mini-boards seront générés par JavaScript -->
+        </div>
+    </div>
+
+    <!-- Bouton Reset -->
+    <div class="controls">
+        <button class="button btn-secondary" id="resetBtn">🔄 Nouvelle Partie</button>
+    </div>
+
+    <!-- Message de fin de partie -->
+    <div class="game-message" id="gameMessage">
+        <div class="message-content" id="messageContent">
+            <h2 id="winnerText"></h2>
+            <button class="button btn-primary" id="playAgainBtn">Rejouer</button>
+        </div>
+    </div>
+
+    <script>
+        // ===== ÉTAT DU JEU =====
+        const gameState = {
+            // Joueur actuel ('X' ou 'O')
+            currentPlayer: 'X',
+            
+            // 9 mini-boards, chacun contenant 9 cases
+            // null = vide, 'X' = joueur X, 'O' = joueur O
+            boards: Array(9).fill(null).map(() => Array(9).fill(null)),
+            
+            // État de victoire de chaque mini-board
+            // null = en cours, 'X' = gagné par X, 'O' = gagné par O, 'draw' = match nul
+            boardWinners: Array(9).fill(null),
+            
+            // Index du mini-board où le prochain coup doit être joué
+            // null = peut jouer n'importe où
+            nextBoard: null,
+            
+            // Gagnant global (null, 'X', 'O', ou 'draw')
+            gameWinner: null,
+            
+            // Scores
+            scores: { X: 0, O: 0, draw: 0 }
+        };
+
+        // ===== ÉLÉMENTS DOM =====
+        const mainBoard = document.getElementById('mainBoard');
+        const currentPlayerEl = document.getElementById('currentPlayer');
+        const playerSymbolEl = document.getElementById('playerSymbol');
+        const gameMessage = document.getElementById('gameMessage');
+        const messageContent = document.getElementById('messageContent');
+        const winnerText = document.getElementById('winnerText');
+        const resetBtn = document.getElementById('resetBtn');
+        const playAgainBtn = document.getElementById('playAgainBtn');
+        const scoreXEl = document.getElementById('scoreX');
+        const scoreOEl = document.getElementById('scoreO');
+        const scoreDrawEl = document.getElementById('scoreDraw');
+
+        // ===== INITIALISATION =====
+        function init() {
+            // Réinitialiser l'état du jeu (mais garder les scores)
+            gameState.currentPlayer = 'X';
+            gameState.boards = Array(9).fill(null).map(() => Array(9).fill(null));
+            gameState.boardWinners = Array(9).fill(null);
+            gameState.nextBoard = null;
+            gameState.gameWinner = null;
+
+            // Construire l'interface
+            buildBoard();
+            updateUI();
+            hideMessage();
+        }
+
+        // ===== CONSTRUCTION DU PLATEAU =====
+        function buildBoard() {
+            mainBoard.innerHTML = '';
+
+            // Créer les 9 mini-boards
+            for (let i = 0; i < 9; i++) {
+                const miniBoard = document.createElement('div');
+                miniBoard.className = 'mini-board';
+                miniBoard.dataset.boardIndex = i;
+
+                // Grille 3x3 des cases
+                const grid = document.createElement('div');
+                grid.className = 'mini-board-grid';
+
+                // Créer les 9 cases
+                for (let j = 0; j < 9; j++) {
+                    const cell = document.createElement('button');
+                    cell.className = 'cell';
+                    cell.dataset.boardIndex = i;
+                    cell.dataset.cellIndex = j;
+                    cell.addEventListener('click', handleCellClick);
+                    grid.appendChild(cell);
+                }
+
+                miniBoard.appendChild(grid);
+
+                // Overlay pour afficher le symbole du gagnant
+                const overlay = document.createElement('div');
+                overlay.className = 'mini-board-overlay';
+                miniBoard.appendChild(overlay);
+
+                mainBoard.appendChild(miniBoard);
+            }
+        }
+
+        // ===== GESTION DU CLIC =====
+        function handleCellClick(e) {
+            // Si la partie est terminée, ignorer
+            if (gameState.gameWinner) return;
+
+            const boardIndex = parseInt(e.target.dataset.boardIndex);
+            const cellIndex = parseInt(e.target.dataset.cellIndex);
+
+            // Vérifier si le coup est valide
+            if (!isValidMove(boardIndex, cellIndex)) return;
+
+            // Jouer le coup
+            playMove(boardIndex, cellIndex);
+
+            // Vérifier victoire locale
+            checkLocalWin(boardIndex);
+
+            // Vérifier victoire globale
+            checkGlobalWin();
+
+            // Si pas de victoire, changer de joueur et continuer
+            if (!gameState.gameWinner) {
+                switchPlayer();
+                updateNextBoard(cellIndex);
+            }
+
+            // Mettre à jour l'interface
+            updateUI();
+        }
+
+        // ===== VALIDATION DU COUP =====
+        function isValidMove(boardIndex, cellIndex) {
+            // La case doit être vide
+            if (gameState.boards[boardIndex][cellIndex] !== null) return false;
+
+            // Le mini-board ne doit pas être déjà gagné
+            if (gameState.boardWinners[boardIndex] !== null) return false;
+
+            // Si nextBoard est défini, doit jouer dans ce board
+            if (gameState.nextBoard !== null && gameState.nextBoard !== boardIndex) {
+                return false;
+            }
+
+            return true;
+        }
+
+        // ===== JOUER UN COUP =====
+        function playMove(boardIndex, cellIndex) {
+            gameState.boards[boardIndex][cellIndex] = gameState.currentPlayer;
+        }
+
+        // ===== VÉRIFICATION VICTOIRE LOCALE =====
+        function checkLocalWin(boardIndex) {
+            const board = gameState.boards[boardIndex];
+            const winner = checkWinner(board);
+
+            if (winner) {
+                gameState.boardWinners[boardIndex] = winner;
+            }
+        }
+
+        // ===== VÉRIFICATION VICTOIRE (GÉNÉRIQUE) =====
+        function checkWinner(board) {
+            // Combinaisons gagnantes
+            const winPatterns = [
+                [0, 1, 2], [3, 4, 5], [6, 7, 8], // Lignes
+                [0, 3, 6], [1, 4, 7], [2, 5, 8], // Colonnes
+                [0, 4, 8], [2, 4, 6]             // Diagonales
+            ];
+
+            // Vérifier chaque pattern
+            for (const pattern of winPatterns) {
+                const [a, b, c] = pattern;
+                if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+                    return board[a];
+                }
+            }
+
+            // Vérifier match nul (toutes les cases remplies)
+            if (board.every(cell => cell !== null)) {
+                return 'draw';
+            }
+
+            return null;
+        }
+
+        // ===== VÉRIFICATION VICTOIRE GLOBALE =====
+        function checkGlobalWin() {
+            const winner = checkWinner(gameState.boardWinners);
+
+            if (winner) {
+                gameState.gameWinner = winner;
+                
+                // Mettre à jour les scores
+                if (winner === 'X') {
+                    gameState.scores.X++;
+                } else if (winner === 'O') {
+                    gameState.scores.O++;
+                } else if (winner === 'draw') {
+                    gameState.scores.draw++;
+                }
+
+                // Afficher le message de victoire après un court délai
+                setTimeout(() => showWinMessage(), 500);
+            }
+        }
+
+        // ===== CHANGEMENT DE JOUEUR =====
+        function switchPlayer() {
+            gameState.currentPlayer = gameState.currentPlayer === 'X' ? 'O' : 'X';
+        }
+
+        // ===== MISE À JOUR DU PROCHAIN BOARD =====
+        function updateNextBoard(cellIndex) {
+            const targetBoard = cellIndex;
+
+            // Si le board ciblé est déjà gagné ou plein, peut jouer n'importe où
+            if (gameState.boardWinners[targetBoard] !== null) {
+                gameState.nextBoard = null;
+            } else {
+                gameState.nextBoard = targetBoard;
+            }
+        }
+
+        // ===== MISE À JOUR DE L'INTERFACE =====
+        function updateUI() {
+            updateCells();
+            updateBoardStates();
+            updatePlayerDisplay();
+            updateScores();
+        }
+
+        // ===== MISE À JOUR DES CASES =====
+        function updateCells() {
+            const cells = document.querySelectorAll('.cell');
+
+            cells.forEach(cell => {
+                const boardIndex = parseInt(cell.dataset.boardIndex);
+                const cellIndex = parseInt(cell.dataset.cellIndex);
+                const value = gameState.boards[boardIndex][cellIndex];
+
+                // Mettre à jour le contenu
+                cell.textContent = value || '';
+                
+                // Mettre à jour les classes
+                cell.classList.remove('x', 'o', 'taken');
+                if (value === 'X') {
+                    cell.classList.add('x', 'taken');
+                } else if (value === 'O') {
+                    cell.classList.add('o', 'taken');
+                }
+            });
+        }
+
+        // ===== MISE À JOUR DES ÉTATS DES MINI-BOARDS =====
+        function updateBoardStates() {
+            const miniBoards = document.querySelectorAll('.mini-board');
+
+            miniBoards.forEach((board, index) => {
+                const winner = gameState.boardWinners[index];
+                const overlay = board.querySelector('.mini-board-overlay');
+
+                // Réinitialiser les classes
+                board.classList.remove('playable', 'disabled', 'won', 'won-x', 'won-o');
+
+                // Si le board est gagné
+                if (winner) {
+                    board.classList.add('won');
+                    if (winner === 'X') {
+                        board.classList.add('won-x');
+                        overlay.textContent = 'X';
+                    } else if (winner === 'O') {
+                        board.classList.add('won-o');
+                        overlay.textContent = 'O';
+                    } else if (winner === 'draw') {
+                        overlay.textContent = '=';
+                    }
+                } else {
+                    overlay.textContent = '';
+
+                    // Déterminer si le board est jouable
+                    if (gameState.gameWinner) {
+                        // Partie terminée, tout est désactivé
+                        board.classList.add('disabled');
+                    } else if (gameState.nextBoard === null) {
+                        // Peut jouer n'importe où (sauf les boards gagnés)
+                        board.classList.add('playable');
+                    } else if (gameState.nextBoard === index) {
+                        // Doit jouer dans ce board
+                        board.classList.add('playable');
+                    } else {
+                        // Ne peut pas jouer ici
+                        board.classList.add('disabled');
+                    }
+                }
+            });
+        }
+
+        // ===== MISE À JOUR AFFICHAGE JOUEUR ACTUEL =====
+        function updatePlayerDisplay() {
+            playerSymbolEl.textContent = gameState.currentPlayer;
+            
+            currentPlayerEl.classList.remove('player-x', 'player-o');
+            if (gameState.currentPlayer === 'X') {
+                currentPlayerEl.classList.add('player-x');
+            } else {
+                currentPlayerEl.classList.add('player-o');
+            }
+        }
+
+        // ===== MISE À JOUR DES SCORES =====
+        function updateScores() {
+            scoreXEl.textContent = gameState.scores.X;
+            scoreOEl.textContent = gameState.scores.O;
+            scoreDrawEl.textContent = gameState.scores.draw;
+        }
+
+        // ===== AFFICHAGE MESSAGE DE VICTOIRE =====
+        function showWinMessage() {
+            const winner = gameState.gameWinner;
+
+            messageContent.classList.remove('winner-x', 'winner-o');
+
+            if (winner === 'X') {
+                winnerText.textContent = '🎉 Victoire de X ! 🎉';
+                messageContent.classList.add('winner-x');
+            } else if (winner === 'O') {
+                winnerText.textContent = '🎉 Victoire de O ! 🎉';
+                messageContent.classList.add('winner-o');
+            } else if (winner === 'draw') {
+                winnerText.textContent = '🤝 Match Nul ! 🤝';
+            }
+
+            gameMessage.classList.add('show');
+        }
+
+        // ===== MASQUER MESSAGE =====
+        function hideMessage() {
+            gameMessage.classList.remove('show');
+        }
+
+        // ===== RESET =====
+        function resetGame() {
+            hideMessage();
+            init();
+        }
+
+        // ===== ÉVÉNEMENTS =====
+        resetBtn.addEventListener('click', resetGame);
+        playAgainBtn.addEventListener('click', resetGame);
+
+        // ===== DÉMARRAGE =====
+        init();
+    </script>
+</body>
+</html>
