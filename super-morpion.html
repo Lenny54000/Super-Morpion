@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Super Morpion</title>
+  <style>
+    /* ============================================================
+       VARIABLES & RESET
+    ============================================================ */
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+
+    :root {
+      --bg:        #0a0a0f;
+      --surface:   #12121c;
+      --border:    #2a2a3f;
+      --x-color:   #ff4d6d;
+      --o-color:   #00e5ff;
+      --active-glow: rgba(255, 215, 0, 0.25);
+      --active-border: #ffd700;
+      --won-x:     rgba(255, 77, 109, 0.12);
+      --won-o:     rgba(0, 229, 255, 0.12);
+      --draw-bg:   rgba(120, 120, 140, 0.12);
+      --text:      #e0e0f0;
+      --muted:     #555570;
+      --cell-size: min(9vw, 42px);
+      --gap-inner: 3px;
+      --gap-outer: min(2vw, 10px);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Share Tech Mono', monospace;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 20px 10px 40px;
+      overflow-x: hidden;
+    }
+
+    /* Subtle grid background */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,.015) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.015) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ============================================================
+       HEADER
+    ============================================================ */
+    header {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    header h1 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: clamp(1.4rem, 5vw, 2.4rem);
+      font-weight: 900;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      background: linear-gradient(135deg, var(--x-color), var(--o-color));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      filter: drop-shadow(0 0 20px rgba(0,229,255,0.3));
+    }
+
+    header p.subtitle {
+      font-size: 0.7rem;
+      color: var(--muted);
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+
+    /* ============================================================
+       STATUS BAR
+    ============================================================ */
+    #status-bar {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      width: 100%;
+      max-width: 520px;
+      margin-bottom: 20px;
+      padding: 10px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+
+    .player-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.8rem;
+      letter-spacing: 0.05em;
+    }
+
+    .player-symbol {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1.2rem;
+      font-weight: 900;
+      line-height: 1;
+    }
+
+    .player-symbol.x { color: var(--x-color); text-shadow: 0 0 12px var(--x-color); }
+    .player-symbol.o { color: var(--o-color); text-shadow: 0 0 12px var(--o-color); }
+
+    #score-board {
+      display: flex;
+      gap: 16px;
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+
+    #score-board span { display: flex; align-items: center; gap: 4px; }
+    #score-x { color: var(--x-color); font-weight: 700; }
+    #score-o { color: var(--o-color); font-weight: 700; }
+
+    /* ============================================================
+       CURRENT TURN INDICATOR
+    ============================================================ */
+    #turn-display {
+      position: relative;
+      z-index: 1;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 16px;
+      letter-spacing: 0.08em;
+      min-height: 1.2em;
+      text-align: center;
+      transition: opacity 0.3s;
+    }
+
+    #turn-display .hl {
+      font-weight: 700;
+      font-family: 'Orbitron', sans-serif;
+    }
+
+    #turn-display .hl.x { color: var(--x-color); }
+    #turn-display .hl.o { color: var(--o-color); }
+
+    /* ============================================================
+       MAIN BOARD (3×3 of mini-boards)
+    ============================================================ */
+    #main-board {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--gap-outer);
+      padding: 10px;
+      background: var(--surface);
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 0 40px rgba(0,0,0,0.6);
+    }
+
+    /* ============================================================
+       MINI BOARD (one of the 9 small tic-tac-toe grids)
+    ============================================================ */
+    .mini-board {
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--gap-inner);
+      padding: 6px;
+      border-radius: 6px;
+      border: 2px solid var(--border);
+      background: var(--bg);
+      transition: border-color 0.3s, box-shadow 0.3s, background 0.3s;
+      overflow: hidden;
+    }
+
+    /* Playable mini-board: glowing border */
+    .mini-board.playable {
+      border-color: var(--active-border);
+      box-shadow: 0 0 16px var(--active-glow), inset 0 0 12px rgba(255,215,0,0.04);
+      background: rgba(255, 215, 0, 0.03);
+      cursor: pointer;
+    }
+
+    /* Non-playable mini-board: dimmed */
+    .mini-board.blocked {
+      opacity: 0.4;
+      pointer-events: none;
+    }
+
+    /* Won mini-board */
+    .mini-board.won-x { background: var(--won-x); border-color: var(--x-color); opacity: 1 !important; pointer-events: none; }
+    .mini-board.won-o { background: var(--won-o); border-color: var(--o-color); opacity: 1 !important; pointer-events: none; }
+    .mini-board.draw  { background: var(--draw-bg); border-color: var(--muted); opacity: 0.7; pointer-events: none; }
+
+    /* ============================================================
+       CELLS (individual squares inside a mini-board)
+    ============================================================ */
+    .cell {
+      aspect-ratio: 1;
+      width: var(--cell-size);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.05);
+      font-family: 'Orbitron', sans-serif;
+      font-size: calc(var(--cell-size) * 0.45);
+      font-weight: 900;
+      cursor: default;
+      user-select: none;
+      transition: background 0.15s, transform 0.1s;
+      position: relative;
+    }
+
+    .mini-board.playable .cell:not(.taken) {
+      cursor: pointer;
+    }
+
+    .mini-board.playable .cell:not(.taken):hover {
+      background: rgba(255, 215, 0, 0.1);
+      transform: scale(1.08);
+    }
+
+    .cell.x {
+      color: var(--x-color);
+      text-shadow: 0 0 8px var(--x-color);
+    }
+
+    .cell.o {
+      color: var(--o-color);
+      text-shadow: 0 0 8px var(--o-color);
+    }
+
+    /* Pulse animation when a cell is played */
+    @keyframes cellPop {
+      0%   { transform: scale(0.5); opacity: 0; }
+      60%  { transform: scale(1.15); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    .cell.just-played {
+      animation: cellPop 0.25s ease forwards;
+    }
+
+    /* ============================================================
+       MINI BOARD WINNER OVERLAY
+    ============================================================ */
+    .mini-board-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Orbitron', sans-serif;
+      font-size: clamp(2rem, 7vw, 3.5rem);
+      font-weight: 900;
+      border-radius: 4px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.4s;
+      z-index: 10;
+    }
+
+    .mini-board-overlay.show { opacity: 1; }
+
+    .mini-board-overlay.x {
+      color: var(--x-color);
+      text-shadow: 0 0 30px var(--x-color), 0 0 60px var(--x-color);
+      background: rgba(255,77,109,0.08);
+    }
+
+    .mini-board-overlay.o {
+      color: var(--o-color);
+      text-shadow: 0 0 30px var(--o-color), 0 0 60px var(--o-color);
+      background: rgba(0,229,255,0.08);
+    }
+
+    .mini-board-overlay.draw {
+      color: var(--muted);
+      font-size: clamp(1rem, 4vw, 1.6rem);
+      letter-spacing: 0.05em;
+      background: rgba(100,100,120,0.12);
+    }
+
+    /* ============================================================
+       VICTORY MODAL
+    ============================================================ */
+    #victory-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.75);
+      backdrop-filter: blur(6px);
+    }
+
+    #victory-modal.show { display: flex; }
+
+    #victory-card {
+      background: var(--surface);
+      border: 2px solid var(--border);
+      border-radius: 16px;
+      padding: 40px 48px;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+      max-width: 360px;
+      width: 90%;
+    }
+
+    @keyframes cardIn {
+      from { transform: scale(0.7) translateY(30px); opacity: 0; }
+      to   { transform: scale(1) translateY(0); opacity: 1; }
+    }
+
+    #victory-modal.show #victory-card {
+      animation: cardIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
+
+    #victory-symbol {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 5rem;
+      font-weight: 900;
+      line-height: 1;
+      margin-bottom: 12px;
+    }
+
+    #victory-symbol.x { color: var(--x-color); text-shadow: 0 0 40px var(--x-color); }
+    #victory-symbol.o { color: var(--o-color); text-shadow: 0 0 40px var(--o-color); }
+    #victory-symbol.draw { font-size: 2.5rem; color: var(--muted); }
+
+    #victory-title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1.4rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+      letter-spacing: 0.08em;
+    }
+
+    #victory-subtitle {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 28px;
+    }
+
+    /* ============================================================
+       BUTTONS
+    ============================================================ */
+    .btn {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      padding: 12px 28px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+
+    .btn:active { transform: scale(0.96); }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--x-color), #c9184a);
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(255,77,109,0.4);
+    }
+
+    .btn-primary:hover { box-shadow: 0 6px 28px rgba(255,77,109,0.6); transform: translateY(-1px); }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover { border-color: var(--text); color: var(--text); }
+
+    #reset-btn {
+      position: relative;
+      z-index: 1;
+      margin-top: 20px;
+    }
+
+    /* ============================================================
+       CONFETTI PARTICLES
+    ============================================================ */
+    .confetti-piece {
+      position: fixed;
+      width: 8px;
+      height: 8px;
+      border-radius: 2px;
+      pointer-events: none;
+      z-index: 200;
+      animation: confettiFall linear forwards;
+    }
+
+    @keyframes confettiFall {
+      0%   { transform: translateY(-20px) rotate(0deg); opacity: 1; }
+      100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+    }
+
+    /* ============================================================
+       RESPONSIVE TWEAKS
+    ============================================================ */
+    @media (max-width: 420px) {
+      :root { --cell-size: 8.5vw; --gap-inner: 2px; --gap-outer: 6px; }
+      #victory-card { padding: 28px 24px; }
+    }
+
+    @media (min-width: 600px) {
+      :root { --cell-size: 38px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ============================================================
+       MARKUP
+  ============================================================ -->
+
+  <header>
+    <h1>Super Morpion</h1>
+    <p class="subtitle">Ultimate Tic‑Tac‑Toe</p>
+  </header>
+
+  <!-- Score + player indicator -->
+  <div id="status-bar">
+    <div class="player-info">
+      <span class="player-symbol x">X</span>
+      <span id="score-label-x">Joueur 1</span>
+    </div>
+    <div id="score-board">
+      <span><span id="score-x">0</span> — <span id="score-o">0</span></span>
+    </div>
+    <div class="player-info">
+      <span id="score-label-o">Joueur 2</span>
+      <span class="player-symbol o">O</span>
+    </div>
+  </div>
+
+  <!-- Current turn message -->
+  <div id="turn-display"></div>
+
+  <!-- The 3×3 grid of mini-boards -->
+  <div id="main-board"></div>
+
+  <!-- Reset button -->
+  <button class="btn btn-secondary" id="reset-btn">↺ Nouvelle partie</button>
+
+  <!-- Victory modal -->
+  <div id="victory-modal">
+    <div id="victory-card">
+      <div id="victory-symbol"></div>
+      <div id="victory-title"></div>
+      <div id="victory-subtitle"></div>
+      <button class="btn btn-primary" id="play-again-btn">Rejouer</button>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       JAVASCRIPT — LOGIQUE DU JEU
+  ============================================================ -->
+  <script>
+    'use strict';
+
+    /* ===========================================================
+       CONSTANTES
+    =========================================================== */
+    const EMPTY   = null;
+    const PLAYER  = ['X', 'O'];
+
+    /** Toutes les combinaisons gagnantes pour un plateau 3×3 */
+    const WIN_COMBOS = [
+      [0,1,2], [3,4,5], [6,7,8], // lignes
+      [0,3,6], [1,4,7], [2,5,8], // colonnes
+      [0,4,8], [2,4,6]           // diagonales
+    ];
+
+    /* ===========================================================
+       ÉTAT DU JEU
+    =========================================================== */
+    let state = {};
+
+    /**
+     * Initialise (ou réinitialise) l'état du jeu.
+     * On conserve les scores entre les parties.
+     */
+    function initState() {
+      state = {
+        // Tableau de 9 mini-plateaux, chacun contenant 9 cases (null | 'X' | 'O')
+        boards: Array.from({ length: 9 }, () => Array(9).fill(EMPTY)),
+
+        // Vainqueur de chaque mini-plateau : null | 'X' | 'O' | 'draw'
+        boardWinners: Array(9).fill(null),
+
+        // Tour actuel : 0 → joueur X, 1 → joueur O
+        currentPlayer: 0,
+
+        // Index du mini-plateau où le joueur DOIT jouer (-1 = partout)
+        activeBoard: -1,
+
+        // Vainqueur global : null | 'X' | 'O' | 'draw'
+        winner: null,
+
+        // Compteur de scores (persistant entre les parties)
+        scores: state.scores ?? { X: 0, O: 0 }
+      };
+    }
+
+    /* ===========================================================
+       CONSTRUCTION DU DOM
+    =========================================================== */
+
+    /**
+     * Génère l'intégralité du plateau HTML à partir de zéro.
+     * Appelé une seule fois au démarrage.
+     */
+    function buildBoard() {
+      const mainBoard = document.getElementById('main-board');
+      mainBoard.innerHTML = '';
+
+      for (let b = 0; b < 9; b++) {
+        const miniBoard = document.createElement('div');
+        miniBoard.classList.add('mini-board');
+        miniBoard.dataset.board = b;
+
+        // Overlay (grand X/O affiché quand le mini-plateau est gagné)
+        const overlay = document.createElement('div');
+        overlay.classList.add('mini-board-overlay');
+        overlay.dataset.overlay = b;
+        miniBoard.appendChild(overlay);
+
+        // 9 cases internes
+        for (let c = 0; c < 9; c++) {
+          const cell = document.createElement('div');
+          cell.classList.add('cell');
+          cell.dataset.board = b;
+          cell.dataset.cell  = c;
+          cell.addEventListener('click', handleCellClick);
+          miniBoard.appendChild(cell);
+        }
+
+        mainBoard.appendChild(miniBoard);
+      }
+    }
+
+    /* ===========================================================
+       RENDU / MISE À JOUR DE L'INTERFACE
+    =========================================================== */
+
+    /** Met à jour l'ensemble de l'affichage en fonction de l'état courant. */
+    function render() {
+      renderCells();
+      renderBoardStates();
+      renderTurnDisplay();
+      renderScores();
+    }
+
+    /** Redessine le contenu de chaque cellule. */
+    function renderCells() {
+      for (let b = 0; b < 9; b++) {
+        for (let c = 0; c < 9; c++) {
+          const val  = state.boards[b][c];
+          const cell = getCell(b, c);
+          cell.textContent = val ?? '';
+          cell.className   = 'cell' + (val ? ` ${val.toLowerCase()} taken` : '');
+        }
+      }
+    }
+
+    /** Met à jour les classes CSS des mini-plateaux selon leur état. */
+    function renderBoardStates() {
+      for (let b = 0; b < 9; b++) {
+        const mb      = getMiniBoard(b);
+        const winner  = state.boardWinners[b];
+        const overlay = document.querySelector(`[data-overlay="${b}"]`);
+
+        // Réinitialise les classes
+        mb.className = 'mini-board';
+
+        if (winner) {
+          // Mini-plateau terminé
+          if (winner === 'draw') {
+            mb.classList.add('draw');
+            overlay.textContent = '—';
+            overlay.className   = 'mini-board-overlay draw show';
+          } else {
+            mb.classList.add(`won-${winner.toLowerCase()}`);
+            overlay.textContent = winner;
+            overlay.className   = `mini-board-overlay ${winner.toLowerCase()} show`;
+          }
+        } else if (state.winner) {
+          // Partie finie : tous les plateaux non terminés sont bloqués
+          mb.classList.add('blocked');
+          overlay.className = 'mini-board-overlay';
+        } else {
+          // Partie en cours : calcul des zones jouables
+          const isPlayable = (state.activeBoard === -1) || (state.activeBoard === b);
+          mb.classList.add(isPlayable ? 'playable' : 'blocked');
+          overlay.className = 'mini-board-overlay';
+        }
+      }
+    }
+
+    /** Met à jour le message indiquant de quel joueur est le tour. */
+    function renderTurnDisplay() {
+      const el = document.getElementById('turn-display');
+      if (state.winner) { el.textContent = ''; return; }
+
+      const sym   = PLAYER[state.currentPlayer];
+      const label = sym === 'X' ? 'Joueur 1' : 'Joueur 2';
+      el.innerHTML = `Au tour de <span class="hl ${sym.toLowerCase()}">${sym} — ${label}</span>`;
+    }
+
+    /** Met à jour l'affichage des scores. */
+    function renderScores() {
+      document.getElementById('score-x').textContent = state.scores.X;
+      document.getElementById('score-o').textContent = state.scores.O;
+    }
+
+    /* ===========================================================
+       GESTION DES CLICS
+    =========================================================== */
+
+    /**
+     * Gestionnaire principal du clic sur une cellule.
+     * @param {MouseEvent} e
+     */
+    function handleCellClick(e) {
+      if (state.winner) return; // Partie terminée
+
+      const boardIdx = parseInt(e.currentTarget.dataset.board, 10);
+      const cellIdx  = parseInt(e.currentTarget.dataset.cell,  10);
+
+      // Vérifications de validité du coup
+      if (!isMoveValid(boardIdx, cellIdx)) return;
+
+      // Joue le coup
+      playMove(boardIdx, cellIdx);
+    }
+
+    /**
+     * Vérifie si un coup est légal.
+     * @param {number} b - Index du mini-plateau
+     * @param {number} c - Index de la cellule
+     * @returns {boolean}
+     */
+    function isMoveValid(b, c) {
+      // La cellule est déjà occupée
+      if (state.boards[b][c] !== EMPTY) return false;
+
+      // Le mini-plateau est déjà terminé
+      if (state.boardWinners[b] !== null) return false;
+
+      // Un mini-plateau spécifique est imposé et ce n'est pas le bon
+      if (state.activeBoard !== -1 && state.activeBoard !== b) return false;
+
+      return true;
+    }
+
+    /**
+     * Enregistre un coup, vérifie les victoires et passe la main.
+     * @param {number} b - Index du mini-plateau
+     * @param {number} c - Index de la cellule
+     */
+    function playMove(b, c) {
+      const sym = PLAYER[state.currentPlayer];
+
+      // Enregistre le coup
+      state.boards[b][c] = sym;
+
+      // Animation de la cellule
+      const cell = getCell(b, c);
+      cell.textContent = sym;
+      cell.className   = `cell ${sym.toLowerCase()} taken just-played`;
+      setTimeout(() => cell.classList.remove('just-played'), 300);
+
+      // Vérifie si ce mini-plateau est gagné
+      const localWinner = checkWinner(state.boards[b]);
+      if (localWinner) {
+        state.boardWinners[b] = localWinner;
+      } else if (isBoardFull(state.boards[b])) {
+        state.boardWinners[b] = 'draw';
+      }
+
+      // Vérifie si la partie globale est gagnée
+      const globalWinner = checkWinner(state.boardWinners);
+      if (globalWinner) {
+        endGame(globalWinner);
+        render();
+        return;
+      }
+
+      // Vérifie le match nul global
+      if (state.boardWinners.every(w => w !== null)) {
+        endGame('draw');
+        render();
+        return;
+      }
+
+      // Détermine le prochain mini-plateau actif
+      // La cellule jouée détermine l'index du prochain mini-plateau
+      // Si ce plateau est déjà terminé (ou rempli), le joueur peut jouer partout
+      if (state.boardWinners[c] !== null) {
+        state.activeBoard = -1; // Libre
+      } else {
+        state.activeBoard = c;
+      }
+
+      // Passe au joueur suivant
+      state.currentPlayer = 1 - state.currentPlayer;
+
+      render();
+    }
+
+    /* ===========================================================
+       LOGIQUE DE VICTOIRE
+    =========================================================== */
+
+    /**
+     * Vérifie si un tableau de 9 cases contient un vainqueur.
+     * Fonctionne aussi bien pour les mini-plateaux que pour la grille globale.
+     * @param {Array} board - Tableau de 9 valeurs (null | 'X' | 'O' | 'draw')
+     * @returns {string|null} Le symbole vainqueur ('X' ou 'O') ou null
+     */
+    function checkWinner(board) {
+      for (const [a, b, c] of WIN_COMBOS) {
+        const va = board[a], vb = board[b], vc = board[c];
+        // On ignore les cases vides ou "draw" pour la victoire globale
+        if (va && va !== 'draw' && va === vb && va === vc) {
+          return va;
+        }
+      }
+      return null;
+    }
+
+    /**
+     * Vérifie si toutes les cases d'un mini-plateau sont occupées.
+     * @param {Array} board
+     * @returns {boolean}
+     */
+    function isBoardFull(board) {
+      return board.every(cell => cell !== EMPTY);
+    }
+
+    /* ===========================================================
+       FIN DE PARTIE
+    =========================================================== */
+
+    /**
+     * Gère la fin de la partie (victoire ou match nul).
+     * @param {string} winner - 'X', 'O', ou 'draw'
+     */
+    function endGame(winner) {
+      state.winner = winner;
+
+      // Met à jour le score
+      if (winner !== 'draw') {
+        state.scores[winner]++;
+      }
+
+      // Lance les confettis si victoire
+      if (winner !== 'draw') {
+        launchConfetti();
+      }
+
+      // Affiche le modal après un court délai (pour voir le dernier coup)
+      setTimeout(() => showVictoryModal(winner), 500);
+    }
+
+    /** Affiche le modal de victoire. */
+    function showVictoryModal(winner) {
+      const modal    = document.getElementById('victory-modal');
+      const symEl    = document.getElementById('victory-symbol');
+      const titleEl  = document.getElementById('victory-title');
+      const subEl    = document.getElementById('victory-subtitle');
+
+      if (winner === 'draw') {
+        symEl.textContent  = '🤝';
+        symEl.className    = 'draw';
+        titleEl.textContent = 'MATCH NUL';
+        subEl.textContent   = 'Personne ne remporte la partie.';
+      } else {
+        symEl.textContent  = winner;
+        symEl.className    = winner.toLowerCase();
+        const label = winner === 'X' ? 'Joueur 1' : 'Joueur 2';
+        titleEl.textContent = `${label} GAGNE !`;
+        subEl.textContent   = `${winner} a aligné 3 mini-plateaux.`;
+      }
+
+      modal.classList.add('show');
+    }
+
+    /** Cache le modal de victoire. */
+    function hideVictoryModal() {
+      document.getElementById('victory-modal').classList.remove('show');
+    }
+
+    /* ===========================================================
+       CONFETTIS
+    =========================================================== */
+
+    /** Lance une animation de confettis. */
+    function launchConfetti() {
+      const colors = [
+        '#ff4d6d', '#00e5ff', '#ffd700', '#a855f7',
+        '#22c55e', '#f97316', '#e879f9'
+      ];
+
+      for (let i = 0; i < 80; i++) {
+        setTimeout(() => {
+          const piece = document.createElement('div');
+          piece.className = 'confetti-piece';
+          piece.style.cssText = `
+            left: ${Math.random() * 100}vw;
+            top: 0;
+            background: ${colors[Math.floor(Math.random() * colors.length)]};
+            width:  ${4 + Math.random() * 8}px;
+            height: ${4 + Math.random() * 8}px;
+            border-radius: ${Math.random() > 0.5 ? '50%' : '2px'};
+            animation-duration: ${1.5 + Math.random() * 2}s;
+            animation-delay: 0s;
+          `;
+          document.body.appendChild(piece);
+          // Supprime l'élément après l'animation
+          piece.addEventListener('animationend', () => piece.remove());
+        }, i * 30);
+      }
+    }
+
+    /* ===========================================================
+       RESET
+    =========================================================== */
+
+    /** Réinitialise la partie sans toucher aux scores. */
+    function resetGame() {
+      hideVictoryModal();
+      initState();
+      render();
+    }
+
+    /* ===========================================================
+       HELPERS DOM
+    =========================================================== */
+
+    function getMiniBoard(b) {
+      return document.querySelector(`.mini-board[data-board="${b}"]`);
+    }
+
+    function getCell(b, c) {
+      return document.querySelector(`.cell[data-board="${b}"][data-cell="${c}"]`);
+    }
+
+    /* ===========================================================
+       ÉVÉNEMENTS
+    =========================================================== */
+
+    document.getElementById('reset-btn').addEventListener('click', resetGame);
+    document.getElementById('play-again-btn').addEventListener('click', resetGame);
+
+    /* ===========================================================
+       DÉMARRAGE
+    =========================================================== */
+
+    buildBoard();   // Construit le DOM une seule fois
+    initState();    // Initialise l'état
+    render();       // Premier rendu
+  </script>
+</body>
+</html>
